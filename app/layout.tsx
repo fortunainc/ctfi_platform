@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from '@clerk/nextjs';
+import { Inter } from "next/font/google";
 import "./globals.css";
 
+const inter = Inter({ subsets: ["latin"] });
+
 export const metadata: Metadata = {
-  title: "CEI Platform - Clinical Execution Intelligence",
-  description: "Structured intelligence platform for clinical trial execution",
+  title: "BehindTheProtocol - Where Clinical Trial Operators Tell the Truth",
+  description: "Anonymous operational intelligence network for clinical trial operators. Get real answers, share experiences, and navigate the field safely.",
 };
 
 export default function RootLayout({
@@ -14,8 +17,10 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body>{children}</body>
+      <html lang="en" className="dark">
+        <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased`}>
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );

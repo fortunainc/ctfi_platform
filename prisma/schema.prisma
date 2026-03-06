@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// BehindTheProtocol Database Schema
+// Anonymous operational intelligence network for clinical trial operators
 
 generator client {
   provider = "prisma-client-js"
@@ -9,416 +9,147 @@ datasource db {
   provider = "postgresql"
 }
 
-// ============================================
-// USER & AUTHENTICATION (SIMPLIFIED)
-// ============================================
-
+// Anonymous User System
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
+  id              String    @id @default(cuid())
+  clerkId         String?   @unique
+  handle          String    @unique // Auto-generated: Operator_XXXX, CRA_XXXX, SiteLead_XXXX
+  reputationScore Int       @default(0)
+  reputationTier  String    @default("Operator") // Operator, Experienced Operator, Senior Operator, Field Expert, Trusted Contributor
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   
-  // Profile (minimal - no public profiles)
-  firstName String?
-  lastName  String?
-  
-  // Role (simplified)
-  role      UserRole @default(READER)
-  isContributor Boolean @default(false)
-  isEditor   Boolean @default(false)
-  isExpert   Boolean @default(false)  // Expert-on-Call
-  
-  // Stats
-  postMortemsSubmitted Int @default(0)
-  postMortemsApproved  Int @default(0)
-  
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  threads         Thread[]
+  replies         Reply[]
+  pollVotes       PollVote[]
+  threadFollows   ThreadFollow[]
+}
+
+// Assist Threads System
+model Thread {
+  id                String   @id @default(cuid())
+  userId            String?
+  title             String
+  trialPhase        String   // Phase 1, Phase 2, Phase 3, Phase 4
+  therapeuticArea   String   // Oncology, Rare Disease, Device, etc.
+  siteCountRange    String   // 1-10, 11-50, 51-100, 100+
+  issueCategory     String   // Enrollment, Protocol burden, Sponsor expectations, etc.
+  description       String
+  urgencyLevel      String   @default("Normal") // Normal, Needs Advice, Urgent, Critical
+  additionalContext String?
+  sameSituationCount Int     @default(0)
   
   // Relations
-  postMortems PostMortem[]
-  urgentThreads UrgentThread[]
-  expertProfile Expert?
-  betaInvites BetaInvite[]
+  user              User?    @relation(fields: [userId], references: [id])
+  replies           Reply[]
+  threadFollows     ThreadFollow[]
+  patternSignals    PatternSignal[]
   
-  @@index([clerkId])
-  @@index([email])
-  @@index([role])
-  @@index([isExpert])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
-enum UserRole {
-  READER       // Can read public patterns and summaries
-  CONTRIBUTOR  // Can submit post-mortems (after approval)
-  EDITOR       // Can moderate and create patterns (founder only)
-}
-
-// ============================================
-// POST-MORTEM (PRIMARY OBJECT)
-// ============================================
-
-model PostMortem {
-  id        String   @id @default(cuid())
-  
-  // Relations
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Core Fields (LOCKED - required for all post-mortems)
-  
-  // 1. Role
-  role      PostMortemRole
-  
-  // 2. Trial Phase
-  trialPhase TrialPhase
-  
-  // 3. Therapeutic Area (broad only)
-  therapeuticArea String
-  
-  // 4. Failure Type
-  failureType FailureType
-  
-  // 5. What failed (short narrative, 200-500 words)
-  whatFailed String @db.Text
-  
-  // 6. Early warning signs (bullet list, 3-7 items)
-  earlyWarningSigns String @db.Text
-  
-  // 7. What leadership misunderstood
-  leadershipMisunderstanding String @db.Text
-  
-  // 8. What I would do differently (actionable insights)
-  whatWouldDoDifferently String @db.Text
-  
-  // 9. When failure became obvious (timeline marker)
-  failureObviousAt String
-  
-  // 10. Confidence level
-  confidenceLevel ConfidenceLevel
-  
-  // Metadata
-  title     String   // Auto-generated or user-provided for easy reference
-  
-  // Moderation
-  status    PostMortemStatus @default(PENDING)
-  moderatedAt DateTime?
-  moderatedBy String? // Clerk ID of editor
-  rejectionReason String? @db.Text
-  
-  // Pattern association (many-to-many)
-  patterns  PostMortemPattern[]
-  
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@index([userId])
-  @@index([status])
-  @@index([role])
-  @@index([trialPhase])
-  @@index([failureType])
-  @@index([therapeuticArea])
-  @@index([createdAt])
-}
-
-enum PostMortemRole {
-  CRC               // Clinical Research Coordinator
-  CRA               // Clinical Research Associate
-  PM                // Project Manager
-  PI                // Principal Investigator
-  SITE_DIRECTOR     // Site Director
-  SPONSOR_OPS       // Sponsor Operations
-}
-
-enum TrialPhase {
-  PHASE_I
-  PHASE_II
-  PHASE_III
-  PHASE_IV
-}
-
-enum FailureType {
-  ENROLLMENT_COLLAPSE
-  PROTOCOL_OVERLOAD
-  BUDGET_UNDERFUNDING
-  CRO_EXECUTION_FAILURE
-  SITE_SELECTION_MISMATCH
-  AMENDMENT_CASCADE
-  VENDOR_BREAKDOWN
-}
-
-enum ConfidenceLevel {
-  LOW       // Limited experience, unsure of root cause
-  MEDIUM    // Confident in observations, some uncertainty
-  HIGH      // Direct involvement, clear understanding
-}
-
-enum PostMortemStatus {
-  PENDING   // Awaiting moderation
-  APPROVED  // Published to library
-  REJECTED  // Did not meet quality standards
-  FLAGGED   // Requires review
-}
-
-// ============================================
-// FAILURE PATTERN (SECONDARY OBJECT)
-// ============================================
-
-model FailurePattern {
-  id        String   @id @default(cuid())
-  
-  // Core Fields (editorial content)
-  
-  // 1. Pattern definition
-  title     String   @unique
-  slug      String   @unique
-  definition String @db.Text
-  
-  // 2. Typical early signals
-  earlySignals String @db.Text
-  
-  // 3. Why leadership misses it
-  whyMissed String @db.Text
-  
-  // 4. What actually causes it
-  rootCause String @db.Text
-  
-  // 5. What mitigates it (observations, not advice)
-  mitigation String @db.Text
-  
-  // Metadata
-  failureType FailureType
-  therapeuticArea String? // Optional, some patterns are cross-therapeutic
-  
-  // Summary for free tier
-  summary   String @db.Text // 2-3 sentence teaser
-  
-  // Editor info
-  createdBy String // Clerk ID of editor
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Statistics
-  viewCount Int @default(0)
-  relatedPostMortemsCount Int @default(0)
-  
-  // Post-mortems that support this pattern
-  postMortems PostMortemPattern[]
-  
-  @@index([slug])
-  @@index([failureType])
-  @@index([therapeuticArea])
-  @@index([createdAt])
-}
-
-// Join table for PostMortem <-> FailurePattern
-model PostMortemPattern {
+// Reply System
+model Reply {
   id             String   @id @default(cuid())
+  threadId       String
+  userId         String?
+  content        String
+  helpfulVotes   Int      @default(0)
+  isMostHelpful  Boolean  @default(false)
   
-  postMortemId   String
-  postMortem     PostMortem @relation(fields: [postMortemId], references: [id], onDelete: Cascade)
-  
-  patternId      String
-  pattern        FailurePattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
-  
-  // Editorial confidence in this association
-  confidence     Int @default(100) // 0-100
+  // Relations
+  thread         Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id])
   
   createdAt      DateTime @default(now())
-  
-  @@unique([postMortemId, patternId])
-  @@index([postMortemId])
-  @@index([patternId])
+  updatedAt      DateTime @updatedAt
 }
 
-// ============================================
-// EXPERT-ON-CALL URGENT SUPPORT
-// ============================================
+// Reality Check Polls System
+model Poll {
+  id               String    @id @default(cuid())
+  question         String
+  trialPhase       String
+  therapeuticArea  String
+  options          String[]  // Array of poll options
+  duration         Int       @default(24) // 24, 48, or 72 hours
+  expiresAt        DateTime
+  
+  // Relations
+  pollVotes        PollVote[]
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
 
-model Expert {
+// Poll Votes
+model PollVote {
   id              String   @id @default(cuid())
-  clerkId         String   @unique
-  email           String   @unique
+  pollId          String
+  userId          String?
+  selectedOption  String
   
-  // Profile (public to vetted users)
-  anonymousHandle String  @unique  // "Expert_One", "Site_Expert", etc.
-  expertise       ExpertExpertise[]
+  // Relations
+  poll            Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user            User?    @relation(fields: [userId], references: [id])
   
-  // Vetting
-  isVetted        Boolean  @default(false)
-  vettedAt        DateTime?
-  vettedBy        String?  // Clerk ID of admin
-  
-  // Ratings (non-monetary recognition)
-  averageRating   Float    @default(0)
-  totalResponses  Int      @default(0)
-  totalHelpful    Int      @default(0)
-  
-  // Recognition
-  reputationScore Int      @default(0)  // Community contribution score
-  
-  // Availability
-  isAvailable     Boolean  @default(true)
-  lastActiveAt    DateTime @default(now())
-  
-  // Timestamps
   createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
   
-  // Relations
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  matchedThreads  UrgentThread[] @relation("UrgentThreadExperts")
-  responses       UrgentResponse[]
-  
-  @@index([isVetted])
-  @@index([isAvailable])
-  @@index([expertise])
+  @@unique([pollId, userId])
 }
 
-enum ExpertExpertise {
-  ENROLLMENT        // Enrollment challenges and patient recruitment
-  PROTOCOL          // Protocol design and amendments
-  BUDGET           // Budgeting and feasibility
-  VENDOR           // Vendor selection and management
-  SITE_OPERATIONS  // Site operations and startup
-  DATA_QUALITY     // Data quality and queries
-  REGULATORY       // Regulatory and IRB issues
-  PATIENT_SAFETY   // Patient safety and adverse events
-  CRO_MANAGEMENT   // CRO relationship management
-  GENERAL          // General operational expertise
-}
-
-model UrgentThread {
-  id              String          @id @default(cuid())
-  
-  // Operator (submitter)
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Trial context
-  trialPhase      TrialPhase
-  therapeuticArea String
-  siteType        String?         // Academic, Community, Private Practice
-  
-  // The problem (structured)
-  failureType     FailureType
-  urgencyLevel    UrgencyLevel
-  title           String          // Auto-generated or user-provided
-  description     String          @db.Text  // What's happening right now
-  
-  // What they need
-  needsHelpWith   String[]        // Escalation script, budget language, etc.
-  
-  // Routing
-  matchedExperts  Expert[]        @relation("UrgentThreadExperts")
-  
-  // Status
-  status          UrgentThreadStatus @default(ACTIVE)
-  
-  // SLA tracking
-  firstResponseAt DateTime?
-  resolvedAt      DateTime?
-  
-  // Satisfaction
-  operatorRating  Int?
-  operatorFeedback String?       @db.Text
-  
-  // Content conversion
-  convertedToRetrospective Boolean @default(false)
-  retrospectiveId String?
-  
-  // Timestamps
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
-  // Relations
-  responses       UrgentResponse[]
-  
-  @@index([userId])
-  @@index([status])
-  @@index([failureType])
-  @@index([urgencyLevel])
-  @@index([createdAt])
-}
-
-enum UrgencyLevel {
-  LOW        // Can wait 24-48 hours
-  MEDIUM     // Need help within 12-24 hours
-  HIGH       // Need help within 6-12 hours
-  CRITICAL   // Need help within 2-4 hours (trial actively failing)
-}
-
-enum UrgentThreadStatus {
-  ACTIVE      // Awaiting expert response
-  IN_PROGRESS // Discussion ongoing
-  RESOLVED    // Operator marked as resolved
-  ABANDONED   // No response for 72+ hours
-  CLOSED      // Admin closed
-}
-
-model UrgentResponse {
-  id              String       @id @default(cuid())
-  
-  // Thread
-  threadId        String
-  thread          UrgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  
-  // Expert
-  expertId        String
-  expert          Expert       @relation(fields: [expertId], references: [id], onDelete: Cascade)
-  
-  // Response
-  content         String       @db.Text
-  
-  // What to check (structured)
-  whatToCheck     String[]     @db.Text  // Checklist for operator
-  
-  // Questions to ask
-  questionsToAsk  String[]     @db.Text
-  
-  // Escalation support
-  escalationScript String?     @db.Text
-  
-  // Recognition (non-monetary)
-  isHelpful       Boolean?
-  helpfulRating   Int?
-  
-  // Timestamps
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  
-  @@index([threadId])
-  @@index([expertId])
-  @@index([createdAt])
-}
-
-// ============================================
-// BETA INVITE SYSTEM
-// ============================================
-
-model BetaInvite {
+// Thread Follow System
+model ThreadFollow {
   id        String   @id @default(cuid())
-  email     String   @unique
-  code      String   @unique
-  status    InviteStatus @default(PENDING)
-  expiresAt DateTime
-  
+  threadId  String
   userId    String?
+  
+  // Relations
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
   user      User?    @relation(fields: [userId], references: [id])
   
   createdAt DateTime @default(now())
-  usedAt    DateTime?
   
-  @@index([code])
-  @@index([email])
-  @@index([status])
+  @@unique([threadId, userId])
 }
 
-enum InviteStatus {
-  PENDING
-  ACCEPTED
-  EXPIRED
-  REVOKED
+// Case Drops - Weekly Anonymous Stories
+model CaseDrop {
+  id              String   @id @default(cuid())
+  caseNumber      Int      @unique
+  title           String
+  content         String
+  trialPhase      String
+  outcome         String
+  discussionLink  String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Trial Type Rooms
+model TrialTypeRoom {
+  id          String   @id @default(cuid())
+  name        String   @unique // Oncology Trials, Rare Disease Trials, Device Trials, etc.
+  description String
+  slug        String   @unique
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Pattern Recognition Engine (Backend AI Tags)
+model PatternSignal {
+  id             String   @id @default(cuid())
+  threadId       String
+  patternTag     String   // Protocol Burden, Enrollment Assumption Failure, etc.
+  confidenceScore Float
+  
+  // Relations
+  thread         Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime @default(now())
+  
+  @@unique([threadId, patternTag])
 }
