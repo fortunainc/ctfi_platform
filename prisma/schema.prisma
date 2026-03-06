@@ -9,13 +9,14 @@ datasource db {
   provider = "postgresql"
 }
 
-// Anonymous User System
+// Anonymous User System with Enhanced Reputation
 model User {
   id              String    @id @default(cuid())
   clerkId         String?   @unique
   handle          String    @unique // Auto-generated: Operator_XXXX, CRA_XXXX, SiteLead_XXXX
   reputationScore Int       @default(0)
   reputationTier  String    @default("Operator") // Operator, Experienced Operator, Senior Operator, Field Expert, Trusted Contributor
+  badges          String[]  @default([]) // Trial Fixer, Protocol Navigator, Site Advocate, Enrollment Strategist
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
@@ -23,6 +24,9 @@ model User {
   replies         Reply[]
   pollVotes       PollVote[]
   threadFollows   ThreadFollow[]
+  playbooks       OperatorPlaybook[]
+  confessions     TrialConfession[]
+  careerDiscussions CareerDiscussion[]
 }
 
 // Assist Threads System
@@ -38,6 +42,7 @@ model Thread {
   urgencyLevel      String   @default("Normal") // Normal, Needs Advice, Urgent, Critical
   additionalContext String?
   sameSituationCount Int     @default(0)
+  signalType        String   @default("Assist") // Assist, Industry Signal, Career Survival
   
   // Relations
   user              User?    @relation(fields: [userId], references: [id])
@@ -57,6 +62,7 @@ model Reply {
   content        String
   helpfulVotes   Int      @default(0)
   isMostHelpful  Boolean  @default(false)
+  isPinned       Boolean  @default(false) // For situation rooms
   
   // Relations
   thread         Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
@@ -114,6 +120,77 @@ model ThreadFollow {
   @@unique([threadId, userId])
 }
 
+// Industry Signals - Triggered by public events
+model IndustrySignal {
+  id              String   @id @default(cuid())
+  title           String
+  source          String   // FDA warning letters, EMA reports, trial terminations, etc.
+  sourceUrl       String?
+  eventDate       DateTime
+  question        String   // Discussion prompt for operators
+  therapeuticArea String?
+  trialPhase      String?
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Operator Playbooks - Structured knowledge from high-value threads
+model OperatorPlaybook {
+  id                String   @id @default(cuid())
+  title             String
+  threadId          String?  // Source thread if converted from discussion
+  userId            String?  // Creator
+  situationDescription String
+  warningSigns      String[] // Array of warning signs
+  escalationSteps   String[] // Array of escalation steps
+  escalationLanguage String  // Example language
+  lessonsLearned    String
+  therapeuticArea   String
+  trialPhase        String?
+  isPublished       Boolean  @default(true)
+  
+  // Relations
+  user              User?    @relation(fields: [userId], references: [id])
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Trial Confessions - Anonymous stories
+model TrialConfession {
+  id              String   @id @default(cuid())
+  userId          String?
+  title           String
+  content         String
+  therapeuticArea String?
+  trialPhase      String?
+  isApproved      Boolean  @default(false) // Moderation approval
+  
+  // Relations
+  user            User?    @relation(fields: [userId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Career Survival Discussions
+model CareerDiscussion {
+  id              String   @id @default(cuid())
+  userId          String?
+  title           String
+  content         String
+  topic           String   // Pushing back on sponsors, Avoiding blame, CRO pressure, etc.
+  helpfulVotes    Int      @default(0)
+  
+  // Relations
+  user            User?    @relation(fields: [userId], references: [id])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 // Case Drops - Weekly Anonymous Stories
 model CaseDrop {
   id              String   @id @default(cuid())
@@ -128,15 +205,19 @@ model CaseDrop {
   updatedAt       DateTime @updatedAt
 }
 
-// Trial Type Rooms
+// Trial Type Rooms (Situation Rooms)
 model TrialTypeRoom {
-  id          String   @id @default(cuid())
-  name        String   @unique // Oncology Trials, Rare Disease Trials, Device Trials, etc.
-  description String
-  slug        String   @unique
+  id               String    @id @default(cuid())
+  name             String    @unique // Oncology Trials, Rare Disease Trials, Device Trials, etc.
+  description      String
+  slug             String    @unique
+  participantCount Int       @default(0)
+  lastActiveAt     DateTime  @default(now())
+  isActive         Boolean   @default(true)
+  closesAt         DateTime? // Auto-close after 30 days of inactivity
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 // Pattern Recognition Engine (Backend AI Tags)

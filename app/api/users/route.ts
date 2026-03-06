@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
         handle,
         reputationScore: 0,
         reputationTier: 'Operator',
+        badges: [],
       }
     });
     
