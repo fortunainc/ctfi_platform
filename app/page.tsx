@@ -173,7 +173,7 @@ export default function HomePage() {
             <Link href='/' className='text-xl font-bold text-cyan-400'>
               BehindTheProtocol
             </Link>
-            <nav className='flex gap-6'>
+            <nav className='flex gap-6 items-center'>
               <Link href='/threads' className='text-slate-300 hover:text-cyan-400 transition-colors'>
                 Threads
               </Link>
@@ -191,6 +191,12 @@ export default function HomePage() {
               </Link>
               <Link href='/career' className='text-slate-300 hover:text-cyan-400 transition-colors'>
                 Career
+              </Link>
+              <Link href='/privacy' className='flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-sm font-medium border border-green-500/20 hover:bg-green-500/20 transition-colors'>
+                <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
+                  <path fillRule='evenodd' d='M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z' clipRule='evenodd' />
+                </svg>
+                Privacy Protected
               </Link>
             </nav>
           </div>

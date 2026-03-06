@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { redactContent, validateContent } from '@/lib/redaction';
 
 // GET /api/threads - List threads with filters
 export async function GET(request: NextRequest) {
@@ -133,23 +134,38 @@ export async function POST(request: NextRequest) {
             handle,
             reputationScore: 0,
             reputationTier: 'Operator',
+            badges: [],
           }
         });
       }
     }
+
+    // Validate content (no file attachments)
+    const contentValidation = validateContent(description);
+    if (!contentValidation.isValid) {
+      return NextResponse.json(
+        { error: contentValidation.errors.join(', ') },
+        { status: 400 }
+      );
+    }
+
+    // Redact PII from content before storage
+    const redactedTitle = redactContent(title);
+    const redactedDescription = redactContent(description);
+    const redactedAdditionalContext = additionalContext ? redactContent(additionalContext) : null;
     
-    // Create thread
+    // Create thread with redacted content
     const thread = await prisma.thread.create({
       data: {
         userId: user?.id,
-        title,
+        title: redactedTitle,
         trialPhase,
         therapeuticArea,
         siteCountRange,
         issueCategory,
         urgencyLevel,
-        description,
-        additionalContext,
+        description: redactedDescription,
+        additionalContext: redactedAdditionalContext,
         sameSituationCount: 0,
       },
       include: {

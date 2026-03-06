@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { redactContent, validateContent } from '@/lib/redaction';
 
 // POST /api/threads/[id]/replies - Create a reply
 export async function POST(
@@ -26,17 +27,30 @@ export async function POST(
             handle,
             reputationScore: 0,
             reputationTier: 'Operator',
+            badges: [],
           }
         });
       }
     }
+
+    // Validate content (no file attachments)
+    const contentValidation = validateContent(content);
+    if (!contentValidation.isValid) {
+      return NextResponse.json(
+        { error: contentValidation.errors.join(', ') },
+        { status: 400 }
+      );
+    }
+
+    // Redact PII from content before storage
+    const redactedContent = redactContent(content);
     
-    // Create reply
+    // Create reply with redacted content
     const reply = await prisma.reply.create({
       data: {
         userId: user?.id,
         threadId: id,
-        content,
+        content: redactedContent,
         helpfulVotes: 0,
         isMostHelpful: false,
       },

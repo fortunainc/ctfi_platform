@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import { redactContent, validateContent } from '@/lib/redaction';
 
 // GET /api/career-discussions - List all career discussions
 export async function GET(request: NextRequest) {
@@ -66,6 +67,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate content (no file attachments)
+    const contentValidation = validateContent(content);
+    if (!contentValidation.isValid) {
+      return NextResponse.json(
+        { error: contentValidation.errors.join(', ') },
+        { status: 400 }
+      );
+    }
+
     // Get or create user
     let user = await prisma.user.findUnique({
       where: { clerkId: userId },
@@ -76,15 +86,20 @@ export async function POST(request: NextRequest) {
         data: {
           clerkId: userId,
           handle: `Operator_${Math.floor(1000 + Math.random() * 9000)}`,
+          badges: [],
         },
       });
     }
 
+    // Redact PII from content
+    const redactedTitle = redactContent(title);
+    const redactedContent = redactContent(content);
+
     const discussion = await prisma.careerDiscussion.create({
       data: {
         userId: user.id,
-        title,
-        content,
+        title: redactedTitle,
+        content: redactedContent,
         topic,
       },
     });

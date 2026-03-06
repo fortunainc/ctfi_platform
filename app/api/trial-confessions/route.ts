@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import { redactConfession, validateContent } from '@/lib/redaction';
 
 // GET /api/trial-confessions - List approved confessions
 export async function GET() {
@@ -58,6 +59,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate content (no file attachments)
+    const contentValidation = validateContent(content);
+    if (!contentValidation.isValid) {
+      return NextResponse.json(
+        { error: contentValidation.errors.join(', ') },
+        { status: 400 }
+      );
+    }
+
     // Get or create user
     let user = await prisma.user.findUnique({
       where: { clerkId: userId },
@@ -68,15 +78,20 @@ export async function POST(request: NextRequest) {
         data: {
           clerkId: userId,
           handle: `Operator_${Math.floor(1000 + Math.random() * 9000)}`,
+          badges: [],
         },
       });
     }
 
+    // Apply enhanced redaction for confessions
+    const redactedTitle = redactConfession(title);
+    const redactedContent = redactConfession(content);
+
     const confession = await prisma.trialConfession.create({
       data: {
         userId: user.id,
-        title,
-        content,
+        title: redactedTitle,
+        content: redactedContent,
         therapeuticArea: therapeuticArea || null,
         trialPhase: trialPhase || null,
         isApproved: false, // Requires moderation approval
